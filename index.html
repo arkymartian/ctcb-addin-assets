@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    body { font-family: Segoe UI, sans-serif; padding: 20px; background: #f4f6f9; }
+    .btn { background: #1a4a7a; color: white; border: none; padding: 10px 20px;
+           border-radius: 6px; cursor: pointer; font-size: 14px; width: 100%; }
+    .btn:hover { background: #0d2b4e; }
+    .msg { margin-top: 12px; font-size: 13px; color: #444; text-align: center; }
+  </style>
+</head>
+<body>
+  <p style="font-size:13px;color:#555;">
+    Think this email is suspicious? Report it to the CTCB IT Security team.
+  </p>
+  <button class="btn" onclick="reportEmail()">🚨 Report Phishing Email</button>
+  <div class="msg" id="msg"></div>
+
+  <script>
+    Office.initialize = function() {};
+
+    function reportEmail() {
+      var item = Office.context.mailbox.item;
+      var msgEl = document.getElementById('msg');
+
+      // Get email headers to extract GoPhish RId
+      item.getAllInternetHeadersAsync(function(result) {
+        if (result.status === Office.AsyncResultStatus.Succeeded) {
+          var headers = result.value;
+
+          // Forward to security team
+          item.displayReplyForm({
+            htmlBody: 'Reporting this email as suspicious.',
+            toRecipients: ['Security@ctcbonline.com']
+          });
+
+          // Notify GoPhish API
+          var rid = extractRId(headers);
+          if (rid) {
+            fetch('http://ctcb-gp/api/campaigns/report', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'c690c563ba78c6dad74ce8718b8c0c131b8f843ee92bbeca2af5dfe6b49628c1'
+              },
+              body: JSON.stringify({ rid: rid })
+            });
+          }
+
+          msgEl.innerHTML = '✅ Reported to Security@ctcbonline.com';
+          msgEl.style.color = '#2d6a2d';
+        }
+      });
+    }
+
+    function extractRId(headers) {
+      // GoPhish injects a unique RId into email headers
+      var match = headers.match(/X-Gophish-Contact:\s*(.+)/i);
+      return match ? match[1].trim() : null;
+    }
+  </script>
+</body>
+</html>
