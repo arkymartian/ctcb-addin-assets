@@ -259,6 +259,11 @@
 <script>
   Office.initialize = function() {};
 
+  const PHISHER_EMAIL = 'f3d59d7a-1e0f-460e-aa29-01783844b77c@phisher.knowbe4.com';
+  const SECURITY_EMAIL = 'Security@ctcbonline.com';
+  const GOPHISH_API_KEY = 'YOUR_GOPHISH_API_KEY';
+  const GOPHISH_URL = 'https://ctcb-gp';
+
   function reportEmail() {
     var btn = document.getElementById('reportBtn');
     btn.disabled = true;
@@ -266,18 +271,28 @@
 
     var item = Office.context.mailbox.item;
 
-    // Get headers to extract GoPhish RId
     if (item && item.getAllInternetHeadersAsync) {
       item.getAllInternetHeadersAsync(function(result) {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
-          var rid = extractRId(result.value);
+          var headers = result.value;
+          var rid = extractRId(headers);
+
           if (rid) {
+            // Matches a GoPhish simulation — log it and forward to PhishER as simulation
             notifyGophish(rid);
+            forwardToPhishER(item, true);
+          } else {
+            // No GoPhish match — potentially real threat, forward to PhishER for triage
+            forwardToPhishER(item, false);
           }
+        } else {
+          // Couldn't read headers — forward to PhishER as unknown
+          forwardToPhishER(item, false);
         }
         showSuccess();
       });
     } else {
+      forwardToPhishER(item, false);
       showSuccess();
     }
   }
@@ -288,15 +303,32 @@
   }
 
   function notifyGophish(rid) {
-    fetch('https://ctcb-gp/api/campaigns/report', {
+    fetch(GOPHISH_URL + '/api/campaigns/report', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer YOUR_GOPHISH_API_KEY'
+        'Authorization': 'Bearer ' + GOPHISH_API_KEY
       },
       body: JSON.stringify({ rid: rid }),
       keepalive: true
     }).catch(function() {});
+  }
+
+  function forwardToPhishER(item, isSimulation) {
+    var subject = isSimulation
+      ? '[SIMULATION] Reported Phishing Email'
+      : '[POTENTIAL THREAT] Reported Phishing Email';
+
+    var body = isSimulation
+      ? 'This email was reported by a user and matches an active GoPhish simulation campaign. No action required — logged for awareness tracking.'
+      : 'This email was reported by a user and does NOT match any active GoPhish simulation. Please review for potential real phishing threat.';
+
+    // Forward to PhishER and Security team
+    item.displayReplyAllForm({
+      toRecipients: [PHISHER_EMAIL, SECURITY_EMAIL],
+      subject: subject,
+      htmlBody: '<p>' + body + '</p>'
+    });
   }
 
   function showSuccess() {
