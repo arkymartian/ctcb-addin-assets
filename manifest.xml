@@ -6,16 +6,17 @@
   xsi:type="MailApp">
 
   <Id>fbfbcc1a-ca4e-4828-bfc3-7df8b9fb42c2</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.0.0.1</Version>
   <ProviderName>Citizens Tri-County Bank IT Security</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Report Phishing"/>
   <Description DefaultValue="Report suspicious emails to CTCB IT Security"/>
   <IconUrl DefaultValue="https://raw.githubusercontent.com/arkymartian/ctcb-addin-assets/main/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://raw.githubusercontent.com/arkymartian/ctcb-addin-assets/main/icon-64.png"/>
-  <SupportUrl DefaultValue="https://ctcb-gp/reporter/index.html"/>
+  <SupportUrl DefaultValue="https://arkymartian.github.io/ctcb-addin-assets/index.html"/>
 
   <AppDomains>
+    <AppDomain>https://arkymartian.github.io</AppDomain>
     <AppDomain>https://ctcb-gp</AppDomain>
   </AppDomains>
 
@@ -32,8 +33,8 @@
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
-        <SourceLocation DefaultValue="https://ctcb-gp/reporter/index.html"/>
-        <RequestedHeight>250</RequestedHeight>
+        <SourceLocation DefaultValue="https://arkymartian.github.io/ctcb-addin-assets/index.html"/>
+        <RequestedHeight>300</RequestedHeight>
       </DesktopSettings>
     </Form>
   </FormSettings>
@@ -89,8 +90,8 @@
         <bt:Image id="Icon.80x80" DefaultValue="https://raw.githubusercontent.com/arkymartian/ctcb-addin-assets/main/icon-64.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="FunctionFile.Url" DefaultValue="https://ctcb-gp/reporter/index.html"/>
-        <bt:Url id="TaskPaneUrl" DefaultValue="https://ctcb-gp/reporter/index.html"/>
+        <bt:Url id="FunctionFile.Url" DefaultValue="https://arkymartian.github.io/ctcb-addin-assets/index.html"/>
+        <bt:Url id="TaskPaneUrl" DefaultValue="https://arkymartian.github.io/ctcb-addin-assets/index.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GroupLabel" DefaultValue="CTCB Security"/>
