@@ -95,7 +95,7 @@
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GroupLabel" DefaultValue="CTCB Security"/>
-        <bt:String id="ButtonLabel" DefaultValue="Report Phishing"/>
+        <bt:String id="ButtonLabel" DefaultValue="CTCB Phish Report"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="ButtonTooltip" DefaultValue="Report this email as suspicious to the CTCB IT Security team."/>
