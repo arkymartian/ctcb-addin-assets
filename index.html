@@ -230,20 +230,19 @@
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           var rid = extractRId(result.value);
           if (rid) {
-            // GoPhish simulation
+            // GoPhish simulation — notify GoPhish, forward, delete, congratulate
             notifyGophish(rid);
-            tryDelete(item);
-            showSimulationMessage();
+            forwardViaEws(item, true);
           } else {
-            // Real threat — forward via EWS then delete
-            forwardViaEws(item);
+            // Real threat — forward, delete, show standard success
+            forwardViaEws(item, false);
           }
         } else {
-          forwardViaEws(item);
+          forwardViaEws(item, false);
         }
       });
     } else {
-      forwardViaEws(item);
+      forwardViaEws(item, false);
     }
   }
 
@@ -264,20 +263,21 @@
     }).catch(function() {});
   }
 
-  // Forward using EWS makeEwsRequestAsync — works without needing forward.getAsync
-  function forwardViaEws(item) {
-    // Get the item ID first
+  // Forward using EWS makeEwsRequestAsync to both recipients, then delete
+  function forwardViaEws(item, isSimulation) {
     var ewsId = item.itemId;
     if (!ewsId) {
-      // Fallback if no itemId
-      showSuccess();
+      isSimulation ? showSimulationMessage() : showSuccess();
       return;
     }
 
-    // Build EWS ForwardItem SOAP request
-    var recipients = 
+    var recipients =
       '<t:Mailbox><t:EmailAddress>' + PHISHER_EMAIL + '</t:EmailAddress></t:Mailbox>' +
       '<t:Mailbox><t:EmailAddress>' + SECURITY_EMAIL + '</t:EmailAddress></t:Mailbox>';
+
+    var bodyNote = isSimulation
+      ? '&lt;p&gt;[GOPHISH SIMULATION] This email was reported by a user via the CTCB phishing report button. This was a simulated phishing campaign.&lt;/p&gt;'
+      : '&lt;p&gt;[POTENTIAL THREAT] This email was reported by a user via the CTCB phishing report button. Please review for potential real phishing threat.&lt;/p&gt;';
 
     var soapEnvelope =
       '<?xml version="1.0" encoding="utf-8"?>' +
@@ -292,9 +292,7 @@
       '    <m:Items>' +
       '      <t:ForwardItem>' +
       '        <t:ToRecipients>' + recipients + '</t:ToRecipients>' +
-      '        <t:NewBodyContent BodyType="HTML">' +
-      '          &lt;p&gt;[POTENTIAL THREAT] This email was reported by a user via the CTCB phishing report button. Please review for potential real phishing threat.&lt;/p&gt;' +
-      '        </t:NewBodyContent>' +
+      '        <t:NewBodyContent BodyType="HTML">' + bodyNote + '</t:NewBodyContent>' +
       '        <t:ReferenceItemId Id="' + ewsId + '"/>' +
       '      </t:ForwardItem>' +
       '    </m:Items>' +
@@ -303,29 +301,34 @@
       '</soap:Envelope>';
 
     Office.context.mailbox.makeEwsRequestAsync(soapEnvelope, function(result) {
-      if (result.status === Office.AsyncResultStatus.Succeeded) {
-        tryDelete(item);
-        showSuccess();
-      } else {
-        // EWS failed — last resort fallback, no compose window
+      if (result.status !== Office.AsyncResultStatus.Succeeded) {
         console.warn('EWS forward failed:', result.error);
-        tryDelete(item);
-        showSuccess();
       }
+      // Always attempt delete and show result, regardless of forward outcome
+      tryDelete(ewsId);
+      isSimulation ? showSimulationMessage() : showSuccess();
     });
   }
 
-  function tryDelete(item) {
-    if (item.moveToAsync) {
-      item.moveToAsync(
-        Office.MailboxEnums.MoveToFolder.DeletedItems,
-        function(result) {
-          if (result.status !== Office.AsyncResultStatus.Succeeded) {
-            console.warn('Could not move to deleted items:', result.error);
-          }
-        }
-      );
-    }
+  // Delete via EWS DeleteItem (moves to Deleted Items folder)
+  function tryDelete(ewsId) {
+    if (!ewsId) return;
+    var soap =
+      '<?xml version="1.0" encoding="utf-8"?>' +
+      '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"' +
+      '  xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"' +
+      '  xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages">' +
+      '<soap:Header><t:RequestServerVersion Version="Exchange2013"/></soap:Header>' +
+      '<soap:Body>' +
+      '  <m:DeleteItem DeleteType="MoveToDeletedItems">' +
+      '    <m:ItemIds>' +
+      '      <t:ItemId Id="' + ewsId + '"/>' +
+      '    </m:ItemIds>' +
+      '  </m:DeleteItem>' +
+      '</soap:Body>' +
+      '</soap:Envelope>';
+
+    Office.context.mailbox.makeEwsRequestAsync(soap, function() {});
   }
 
   function showSimulationMessage() {
