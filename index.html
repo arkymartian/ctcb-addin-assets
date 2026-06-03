@@ -91,9 +91,7 @@
       background: linear-gradient(90deg, #c8a84b, #e8c96b, #c8a84b);
     }
 
-    .card-body {
-      padding: 24px;
-    }
+    .card-body { padding: 24px; }
 
     .alert-icon {
       width: 44px; height: 44px;
@@ -128,11 +126,7 @@
       padding: 10px 14px;
       margin-bottom: 20px;
     }
-    .info-box p {
-      font-size: 12px;
-      color: #445566;
-      line-height: 1.6;
-    }
+    .info-box p { font-size: 12px; color: #445566; line-height: 1.6; }
     .info-box strong { color: #0d2b4e; }
 
     .report-btn {
@@ -178,27 +172,15 @@
       color: #1a4a7a;
       margin-bottom: 6px;
     }
-    .success-text {
-      font-size: 12px;
-      color: #667788;
-      line-height: 1.6;
-    }
+    .success-text { font-size: 12px; color: #667788; line-height: 1.6; }
 
     .card-footer {
       border-top: 1px solid #eef0f3;
       padding: 12px 24px;
       text-align: center;
     }
-    .card-footer p {
-      font-size: 11px;
-      color: #aab0bb;
-      letter-spacing: 0.3px;
-    }
-    .card-footer a {
-      color: #1a4a7a;
-      text-decoration: none;
-      font-weight: 600;
-    }
+    .card-footer p { font-size: 11px; color: #aab0bb; letter-spacing: 0.3px; }
+    .card-footer a { color: #1a4a7a; text-decoration: none; font-weight: 600; }
     .card-footer a:hover { text-decoration: underline; }
   </style>
 </head>
@@ -222,11 +204,9 @@
       <p class="card-text">
         If this email looks suspicious, report it immediately to the CTCB IT Security team. We'll investigate and keep your account safe.
       </p>
-
       <div class="info-box">
         <p><strong>What to look for:</strong> Unexpected requests, urgent language, unknown senders, suspicious links, and most importantly, emails from external senders.</p>
       </div>
-
       <button class="report-btn" id="reportBtn" onclick="reportEmail()">
         🚩 Report This Email to Security
       </button>
@@ -250,10 +230,8 @@
 
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <script>
-  // Use Office.onReady instead of Office.initialize to ensure
-  // the Office runtime is fully loaded before any code runs.
   Office.onReady(function() {
-    // Office is ready — nothing to init on load, button handles everything
+    // Office runtime ready
   });
 
   const PHISHER_EMAIL   = 'f3d59d7a-1e0f-460e-aa29-01783844b77c@phisher.knowbe4.com';
@@ -271,28 +249,29 @@
     if (item && item.getAllInternetHeadersAsync) {
       item.getAllInternetHeadersAsync(function(result) {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
-          var headers = result.value;
-          var rid = extractRId(headers);
-
+          var rid = extractRId(result.value);
           if (rid) {
             notifyGophish(rid);
-            deleteEmail(item);
+            tryDeleteEmail(item);
             showSimulationMessage();
           } else {
-            forwardEmail(item);
-            deleteEmail(item);
-            showSuccess();
+            forwardEmail(item, function() {
+              tryDeleteEmail(item);
+              showSuccess();
+            });
           }
         } else {
-          forwardEmail(item);
-          deleteEmail(item);
-          showSuccess();
+          forwardEmail(item, function() {
+            tryDeleteEmail(item);
+            showSuccess();
+          });
         }
       });
     } else {
-      forwardEmail(item);
-      deleteEmail(item);
-      showSuccess();
+      forwardEmail(item, function() {
+        tryDeleteEmail(item);
+        showSuccess();
+      });
     }
   }
 
@@ -313,32 +292,60 @@
     }).catch(function() {});
   }
 
-  function forwardEmail(item) {
-    item.forward.getAsync(function(result) {
-      if (result.status === Office.AsyncResultStatus.Succeeded) {
-        var forwardItem = result.value;
-        forwardItem.to.setAsync([PHISHER_EMAIL, SECURITY_EMAIL]);
-        forwardItem.subject.setAsync('[POTENTIAL THREAT] Reported Phishing Email');
-        forwardItem.body.prependAsync(
-          '<p>This email was reported by a user via the CTCB phishing report button. ' +
-          'Please review for potential real phishing threat.</p>'
-        );
-        forwardItem.saveAsync(function(saveResult) {
-          if (saveResult.status === Office.AsyncResultStatus.Succeeded) {
-            forwardItem.sendAsync();
-          }
-        });
-      }
-    });
+  function forwardEmail(item, callback) {
+    // Use displayReplyAllForm as fallback if forward.getAsync not available
+    if (item.forward && item.forward.getAsync) {
+      item.forward.getAsync(function(result) {
+        if (result.status === Office.AsyncResultStatus.Succeeded) {
+          var fwd = result.value;
+          fwd.to.setAsync([PHISHER_EMAIL, SECURITY_EMAIL], function() {
+            fwd.subject.setAsync('[POTENTIAL THREAT] Reported Phishing Email', function() {
+              fwd.body.prependAsync(
+                '<p>This email was reported by a user via the CTCB phishing report button. ' +
+                'Please review for potential real phishing threat.</p>',
+                { coercionType: Office.CoercionType.Html },
+                function() {
+                  fwd.saveAsync(function(saveResult) {
+                    if (saveResult.status === Office.AsyncResultStatus.Succeeded) {
+                      fwd.sendAsync(function() {
+                        if (callback) callback();
+                      });
+                    } else {
+                      if (callback) callback();
+                    }
+                  });
+                }
+              );
+            });
+          });
+        } else {
+          // forward.getAsync failed — fall back to displayReplyAllForm
+          item.displayReplyAllForm({
+            toRecipients: [PHISHER_EMAIL, SECURITY_EMAIL],
+            subject: '[POTENTIAL THREAT] Reported Phishing Email',
+            htmlBody: '<p>This email was reported by a user via the CTCB phishing report button.</p>'
+          });
+          if (callback) callback();
+        }
+      });
+    } else {
+      // API not available — fall back to displayReplyAllForm
+      item.displayReplyAllForm({
+        toRecipients: [PHISHER_EMAIL, SECURITY_EMAIL],
+        subject: '[POTENTIAL THREAT] Reported Phishing Email',
+        htmlBody: '<p>This email was reported by a user via the CTCB phishing report button.</p>'
+      });
+      if (callback) callback();
+    }
   }
 
-  function deleteEmail(item) {
+  function tryDeleteEmail(item) {
     if (item.moveToAsync) {
       item.moveToAsync(
         Office.MailboxEnums.MoveToFolder.DeletedItems,
         function(result) {
           if (result.status !== Office.AsyncResultStatus.Succeeded) {
-            console.warn('Could not delete email:', result.error);
+            console.warn('Could not move to deleted items:', result.error);
           }
         }
       );
