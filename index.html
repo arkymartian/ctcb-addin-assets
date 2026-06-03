@@ -33,7 +33,6 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* Header */
     .card-header {
       background: #000000;
       padding: 24px 24px 20px;
@@ -87,13 +86,11 @@
       position: relative; z-index: 1;
     }
 
-    /* Divider */
     .gold-divider {
       height: 3px;
       background: linear-gradient(90deg, #c8a84b, #e8c96b, #c8a84b);
     }
 
-    /* Body */
     .card-body {
       padding: 24px;
     }
@@ -124,7 +121,6 @@
       margin-bottom: 20px;
     }
 
-    /* Info box */
     .info-box {
       background: #f4f7fb;
       border-left: 3px solid #1a4a7a;
@@ -139,7 +135,6 @@
     }
     .info-box strong { color: #0d2b4e; }
 
-    /* Button */
     .report-btn {
       width: 100%;
       padding: 13px;
@@ -162,7 +157,6 @@
     .report-btn:active { transform: scale(0.99); }
     .report-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    /* Success state */
     .success-box {
       display: none;
       text-align: center;
@@ -190,7 +184,6 @@
       line-height: 1.6;
     }
 
-    /* Footer */
     .card-footer {
       border-top: 1px solid #eef0f3;
       padding: 12px 24px;
@@ -214,7 +207,7 @@
 <div class="card">
 
   <div class="card-header">
-    <div class="logo-badge"><img src="https://raw.githubusercontent.com/arkymartian/ctcb-addin-assets/main/CTCBLogo_Final.png" alt="CTCB Logo" /></div>
+    <div class="logo-badge"><img src="https://arkymartian.github.io/ctcb-addin-assets/CTCBLogo_Final.png" alt="CTCB Logo" /></div>
     <div class="bank-name">Citizens Tri-County Bank</div>
     <div class="bank-dept">IT Security Department</div>
   </div>
@@ -240,9 +233,9 @@
     </div>
 
     <div class="success-box" id="success-view">
-      <div class="success-icon">✅</div>
-      <div class="success-title">Report Submitted</div>
-      <p class="success-text">
+      <div class="success-icon" id="success-icon">✅</div>
+      <div class="success-title" id="success-title">Report Submitted</div>
+      <p class="success-text" id="success-text">
         Thank you! This email has been reported to the CTCB IT Security team at <strong>Security@ctcbonline.com</strong>. We'll review it shortly.
       </p>
     </div>
@@ -257,12 +250,16 @@
 
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <script>
-  Office.initialize = function() {};
+  // Use Office.onReady instead of Office.initialize to ensure
+  // the Office runtime is fully loaded before any code runs.
+  Office.onReady(function() {
+    // Office is ready — nothing to init on load, button handles everything
+  });
 
-  const PHISHER_EMAIL = 'f3d59d7a-1e0f-460e-aa29-01783844b77c@phisher.knowbe4.com';
-  const SECURITY_EMAIL = 'Security@ctcbonline.com';
+  const PHISHER_EMAIL   = 'f3d59d7a-1e0f-460e-aa29-01783844b77c@phisher.knowbe4.com';
+  const SECURITY_EMAIL  = 'Security@ctcbonline.com';
   const GOPHISH_API_KEY = 'c690c563ba78c6dad74ce8718b8c0c131b8f843ee92bbeca2af5dfe6b49628c1';
-  const GOPHISH_URL = 'https://ctcb-gp';
+  const GOPHISH_URL     = 'https://ctcb-gp';
 
   function reportEmail() {
     var btn = document.getElementById('reportBtn');
@@ -278,21 +275,23 @@
           var rid = extractRId(headers);
 
           if (rid) {
-            // Matches a GoPhish simulation — log it and forward to PhishER as simulation
             notifyGophish(rid);
-            forwardToPhishER(item, true);
+            deleteEmail(item);
+            showSimulationMessage();
           } else {
-            // No GoPhish match — potentially real threat, forward to PhishER for triage
-            forwardToPhishER(item, false);
+            forwardEmail(item);
+            deleteEmail(item);
+            showSuccess();
           }
         } else {
-          // Couldn't read headers — forward to PhishER as unknown
-          forwardToPhishER(item, false);
+          forwardEmail(item);
+          deleteEmail(item);
+          showSuccess();
         }
-        showSuccess();
       });
     } else {
-      forwardToPhishER(item, false);
+      forwardEmail(item);
+      deleteEmail(item);
       showSuccess();
     }
   }
@@ -314,27 +313,58 @@
     }).catch(function() {});
   }
 
-  function forwardToPhishER(item, isSimulation) {
-    var subject = isSimulation
-      ? '[SIMULATION] Reported Phishing Email'
-      : '[POTENTIAL THREAT] Reported Phishing Email';
-
-    var body = isSimulation
-      ? 'This email was reported by a user and matches an active GoPhish simulation campaign. No action required — logged for awareness tracking.'
-      : 'This email was reported by a user and does NOT match any active GoPhish simulation. Please review for potential real phishing threat.';
-
-    // Forward to PhishER and Security team
-    item.displayReplyAllForm({
-      toRecipients: [PHISHER_EMAIL, SECURITY_EMAIL],
-      subject: subject,
-      htmlBody: '<p>' + body + '</p>'
+  function forwardEmail(item) {
+    item.forward.getAsync(function(result) {
+      if (result.status === Office.AsyncResultStatus.Succeeded) {
+        var forwardItem = result.value;
+        forwardItem.to.setAsync([PHISHER_EMAIL, SECURITY_EMAIL]);
+        forwardItem.subject.setAsync('[POTENTIAL THREAT] Reported Phishing Email');
+        forwardItem.body.prependAsync(
+          '<p>This email was reported by a user via the CTCB phishing report button. ' +
+          'Please review for potential real phishing threat.</p>'
+        );
+        forwardItem.saveAsync(function(saveResult) {
+          if (saveResult.status === Office.AsyncResultStatus.Succeeded) {
+            forwardItem.sendAsync();
+          }
+        });
+      }
     });
+  }
+
+  function deleteEmail(item) {
+    if (item.moveToAsync) {
+      item.moveToAsync(
+        Office.MailboxEnums.MoveToFolder.DeletedItems,
+        function(result) {
+          if (result.status !== Office.AsyncResultStatus.Succeeded) {
+            console.warn('Could not delete email:', result.error);
+          }
+        }
+      );
+    }
+  }
+
+  function showSimulationMessage() {
+    document.getElementById('report-view').style.display = 'none';
+    var s = document.getElementById('success-view');
+    s.style.display = 'block';
+    document.getElementById('success-icon').textContent = '🎉';
+    document.getElementById('success-title').textContent = 'Great job!';
+    document.getElementById('success-text').innerHTML =
+      'This was a <strong>simulated phishing attempt</strong> made by your IT department. ' +
+      'You correctly identified and reported it. Thank you for staying vigilant!';
   }
 
   function showSuccess() {
     document.getElementById('report-view').style.display = 'none';
     var s = document.getElementById('success-view');
     s.style.display = 'block';
+    document.getElementById('success-icon').textContent = '✅';
+    document.getElementById('success-title').textContent = 'Report Submitted';
+    document.getElementById('success-text').innerHTML =
+      'Thank you! This email has been reported to the CTCB IT Security team at ' +
+      '<strong>Security@ctcbonline.com</strong>. We\'ll review it shortly.';
   }
 </script>
 
